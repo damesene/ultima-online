@@ -1,0 +1,131 @@
+// Combat loop: Made by Rodien (1.0.0)
+// The script handle bandages/heal/cure in infinit loop
+
+sysmsg '====== start combat loop ======'
+
+// ⌄⌄⌄⌄⌄ user config ⌄⌄⌄⌄⌄ //
+createlist useConfig; clearlist useConfig
+pushlist useConfig ' bandage'
+pushlist useConfig ' heal'
+pushlist useConfig ' cure'
+
+// diff hp (max - current hp => max hp = 0)
+@setvar! bandageHpThreshold 10
+@setvar! healHpThreshold 60
+@setvar! cureHpThreshold 40
+
+@setvar! logsDelay 30000
+// ^^^^^ user config ^^^^^ //
+
+
+
+@setvar! potDelay 8000
+// It is only maximum bandage delay (if bandage is applied faster it won't wait)
+@setvar! defaultBandageDelay 14000
+
+// Types definition
+@setvar! bandageType 3617
+@setvar! healType 3852
+@setvar! cureType 3847
+
+
+// Disable actions if not preconditions set
+if skill healing < 50 or not findtype bandageType backpack
+    poplist useConfig ' bandage'
+    sysmsg 'Bandages are not ready to use' 48
+endif
+if not findtype healType backpack
+    poplist useConfig ' heal'
+    sysmsg 'Heal pots are not ready to use' 48
+endif
+if not findtype cureType backpack
+    poplist useConfig ' cure'
+    sysmsg 'Cure pots are not ready to use' 48
+endif
+
+sysmsg ' '
+
+if list useConfig <= 0
+    overhead 'Nothing to use' 34
+    stop
+else
+    sysmsg 'Combat loop will use:'
+    foreach use in useConfig; sysmsg use; endfor
+endif
+
+
+
+settimer bandageTimer 999999
+if not timerexists lastPotTimer
+    settimer lastPotTimer 999999
+endif
+settimer logsTimer 999999
+
+createlist logs; clearlist logs
+
+clearsysmsg
+
+while not dead
+    if inlist useConfig ' heal'
+        if findtype healType backpack
+            if diffhits > healHpThreshold and timer lastPotTimer >= potDelay
+                overhead 'Drinking heal!'
+                potion 'Heal'
+                settimer lastPotTimer 0
+            endif
+
+            poplist logs ' no heal pots'
+        elseif not inlist logs ' no heal pots'
+            overhead 'Out of heals!' 34
+            pushlist logs ' no heal pots'
+        endif
+    endif
+    
+    if inlist useConfig ' cure'
+        if findtype cureType backpack
+            if diffhits > cureHpThreshold and poisoned and timer lastPotTimer >= potDelay
+                overhead 'Drinking cures!'
+                potion 'Cure'
+                settimer lastPotTimer 0
+            endif
+
+            poplist logs ' no cure pots'
+        elseif not inlist logs ' no cure pots'
+            overhead 'Out of cures!' 34
+            pushlist logs ' no cure pots'
+        endif
+    endif
+
+    if inlist useConfig ' bandage'
+        // Bandage can be applied out of the script
+        if insysmsg 'begin applying the bandages'
+            settimer bandageTimer 0
+        elseif insysmsg 'finish applying the bandages'
+            settimer bandageTimer 999999
+        endif
+
+        if findtype bandageType backpack as foundBandage
+            if findbuff 'bleed' or diffhits > bandageHpThreshold and timer bandageTimer >= defaultBandageDelay
+                dclick foundBandage
+                wft 500
+                target self
+            endif
+
+            poplist logs ' no bandage'
+        elseif not inlist logs ' no bandage'
+            overhead 'Out of bandages!' 34
+            pushlist logs ' no bandage'
+        endif
+    endif
+
+    // Show script journal
+    if timer logsTimer > logsDelay and list logs > 0
+        sysmsg 'Combat journal:'
+        foreach log in logs
+            sysmsg log
+        endfor
+        settimer logsTimer 0
+    endif
+
+    wait 100
+endwhile 
